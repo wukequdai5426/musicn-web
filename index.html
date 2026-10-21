@@ -219,6 +219,26 @@ input { font: inherit; color: inherit; }
 .notice code { font-family: var(--font-display); font-size: 12.5px; color: var(--acid); background: rgba(205,255,77,.08); border: 1px solid rgba(205,255,77,.18); padding: 2px 6px; border-radius: 4px; }
 .btn-ghost { margin-top: 22px; height: 40px; padding: 0 20px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); font-size: 14px; color: var(--text); display: inline-flex; align-items: center; gap: 8px; transition: all .16s; }
 .btn-ghost:hover { border-color: var(--acid); color: var(--acid); }
+.inline-tip {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 14px 0 4px; padding: 12px 16px; border-radius: var(--r-sm);
+  border: 1px solid rgba(205,255,77,.22); background: rgba(205,255,77,.06);
+  font-size: 13.5px; color: var(--text-2); line-height: 1.6;
+}
+.inline-tip button {
+  margin-left: auto; height: 34px; padding: 0 14px; border-radius: var(--r-sm);
+  border: 1px solid rgba(205,255,77,.4); color: var(--acid); font-size: 13px; white-space: nowrap;
+  transition: background .15s;
+}
+.inline-tip button:hover { background: rgba(205,255,77,.12); }
+.inline-tip .tip-acts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.inline-tip .tip-acts button { margin-left: 0; }
+.inline-tip b { color: var(--text); font-weight: 600; }
+.ib.busy { color: var(--acid); opacity: 1; }
+.ib.busy svg { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.track.is-dead .t-hit { cursor: default; }
+.track.is-dead .playmark { display: none; }
 
 /* ---- 分页 ---- */
 .pager { display: flex; align-items: center; gap: 14px; padding: 24px 0 8px; border-top: 1px solid var(--line); margin-top: 18px; }
@@ -362,10 +382,10 @@ input { font: inherit; color: inherit; }
       <div class="nav-group">
         <div class="nav-label">音源 / Sources</div>
         <div id="chanList">
-          <button class="chan" data-svc="migu" aria-current="true"><span class="dot"></span>咪咕音乐<span class="abbr">MIGU</span></button>
-          <button class="chan" data-svc="wangyi"><span class="dot"></span>网易云音乐<span class="abbr">NETEASE</span></button>
+          <button class="chan" data-svc="wangyi" aria-current="true"><span class="dot"></span>网易云音乐<span class="abbr">NETEASE</span></button>
           <button class="chan" data-svc="kugou"><span class="dot"></span>酷狗音乐<span class="abbr">KUGOU</span></button>
           <button class="chan" data-svc="kuwo"><span class="dot"></span>酷我音乐<span class="abbr">KUWO</span></button>
+          <button class="chan" data-svc="migu"><span class="dot"></span>咪咕音乐<span class="abbr">MIGU</span></button>
         </div>
       </div>
       <div class="nav-group">
@@ -516,9 +536,11 @@ input { font: inherit; color: inherit; }
   'use strict'
 
   var S = {
-    svc: 'migu', q: '', page: 1, pageSize: 30,
+    svc: 'wangyi', q: '', page: 1, pageSize: 30,
     songs: [], total: null, cur: -1, lrc: [], tab: 'lrc', dragging: false
   }
+  // 音源显示名；咪咕免费直链已基本下线，放在末位并做特别提示
+  var SVC = { wangyi: '网易云', kugou: '酷狗', kuwo: '酷我', migu: '咪咕' }
   var $ = function (id) { return document.getElementById(id) }
   var audio = new Audio()
   audio.preload = 'auto'
@@ -656,6 +678,22 @@ input { font: inherit; color: inherit; }
     if (retry) $('retryBtn').addEventListener('click', function () { search(S.page) })
   }
 
+  // 音源可用性提示：咪咕等源常常整页没有免费直链，必须让用户知道是“音源没有”而不是“页面坏了”
+  function deadTip() {
+    var dead = 0
+    S.songs.forEach(function (s) { if (s.dead) dead++ })
+    if (!dead) return ''
+    if (dead < S.songs.length) {
+      return '<div class="inline-tip"><span>本页 <b>' + dead + '</b> 首缺少可用音源，已置灰；其余曲目可正常播放与下载。</span></div>'
+    }
+    var alts = ['wangyi', 'kugou', 'kuwo', 'migu'].filter(function (k) { return k !== S.svc })
+    return '<div class="inline-tip"><span><b>' + SVC[S.svc] + '</b> 本页 ' + S.songs.length +
+      ' 首全部没有可用音源——该音源已不再提供免费直链，换一个音源重新检索即可。</span>' +
+      '<span class="tip-acts">' + alts.map(function (k) {
+        return '<button data-svc="' + k + '">换到' + SVC[k] + '</button>'
+      }).join('') + '</span></div>'
+  }
+
   function renderResults() {
     var rows = ''
     S.songs.forEach(function (sg, i) {
@@ -683,6 +721,7 @@ input { font: inherit; color: inherit; }
     $('results').innerHTML =
       '<div class="res-head"><h2>「<span class="q">' + esc(S.q) + '</span>」</h2>' +
       '<span class="count">' + (S.total ? S.total + ' TRACKS' : S.songs.length + ' TRACKS') + '</span></div>' +
+      deadTip() +
       '<div class="tracks">' + rows + '</div>' +
       '<div class="pager">' +
         '<button class="pager-btn" id="pgPrev"' + (S.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
@@ -695,13 +734,16 @@ input { font: inherit; color: inherit; }
   $('results').addEventListener('click', function (ev) {
     if (ev.target.id === 'pgPrev') return search(S.page - 1)
     if (ev.target.id === 'pgNext') return search(S.page + 1)
+    var sw = ev.target.closest('.inline-tip [data-svc]')
+    if (sw) return switchSvc(sw.dataset.svc)
     var row = ev.target.closest('.track')
     if (!row) return
     var i = +row.dataset.i
     var btn = ev.target.closest('[data-act]')
     if (btn) {
-      if (S.songs[i].dead) return
-      if (btn.dataset.act === 'dl') return download(S.songs[i])
+      // 无音源的按钮本身就是 disabled，这里只是兜底：给出原因而不是静默
+      if (S.songs[i].dead) return play(i)
+      if (btn.dataset.act === 'dl') return download(S.songs[i], btn)
       if (btn.dataset.act === 'lrc') { play(i); setTab('lrc'); return }
       return play(i)
     }
@@ -719,7 +761,12 @@ input { font: inherit; color: inherit; }
   /* ---------- 播放 ---------- */
   function play(i) {
     var sg = S.songs[i]
-    if (!sg || sg.dead) return
+    if (!sg) return
+    if (sg.dead) {
+      // 没有音源时给出明确原因，不再静默 return（用户会以为页面坏了）
+      toast(SVC[S.svc] + ' 这首没有可用音源，可在左侧换一个音源重试', true)
+      return
+    }
     S.cur = i
     parseLrc(sg.lrc)
     renderTab()
@@ -729,12 +776,50 @@ input { font: inherit; color: inherit; }
     $('playbar').classList.add('up')
     $('mobileBar').classList.add('up')
 
-    audio.dataset.fallback = ''
     // 记住本次播放所用的音源，切源后回退时仍走正确的源
     audio.dataset.svc = S.svc
-    audio.src = sg.url || streamUrl(sg, S.svc)
-    audio.play().catch(function () {})
+    startSource(sg, 0)
   }
+
+  /**
+   * 两级音源：0 = 走容器 /api/download 代理（自带浏览器 UA 与按音源的 Referer，
+   * 能绕过 CDN 的 UA 白名单与防盗链，实测最稳）；1 = 直连 CDN（不再占用容器带宽）。
+   */
+  function startSource(sg, stage) {
+    audio.dataset.stage = String(stage)
+    audio.src = (stage === 1 && sg.url) ? sg.url : streamUrl(sg, audio.dataset.svc || S.svc)
+    armWatchdog()
+    var p = audio.play()
+    if (p && p.catch) p.catch(function () { /* 失败由 error 事件与看门狗统一处理 */ })
+  }
+
+  var wdTimer = null
+  // 「不报错但一直缓冲」是最常见的坏情况：error 事件不会触发，必须自己超时兜底
+  function armWatchdog() {
+    clearTimeout(wdTimer)
+    wdTimer = setTimeout(function () {
+      if (audio.paused) return                                   // 用户暂停或 play() 被拒绝
+      if (audio.currentTime > 0.2 || audio.readyState >= 3) return // 已起播
+      recover()
+    }, 12000)
+  }
+
+  function recover() {
+    var sg = S.songs[S.cur]
+    if (!sg) return
+    var stage = Number(audio.dataset.stage || 0)
+    if (stage === 0 && sg.url) {
+      toast('代理无响应，尝试直连音源')
+      startSource(sg, 1)
+      return
+    }
+    clearTimeout(wdTimer)
+    toast('该曲目播放失败：' + SVC[audio.dataset.svc || S.svc] + ' 音源可能已失效', true)
+  }
+
+  audio.addEventListener('playing', clearWatchdog)
+  audio.addEventListener('canplay', clearWatchdog)
+  function clearWatchdog() { clearTimeout(wdTimer) }
 
   function paintRows() {
     Array.prototype.forEach.call(document.querySelectorAll('.track'), function (el) {
@@ -766,6 +851,12 @@ input { font: inherit; color: inherit; }
     if (S.cur < 0) {
       var first = S.songs.findIndex(function (s) { return !s.dead })
       if (first >= 0) play(first)
+      else toast(S.songs.length ? '当前列表没有可用音源，换一个音源再试' : '先搜索歌曲', true)
+      return
+    }
+    if (audio.error) {
+      // 上一次加载失败：重新从直链开始，而不是原地 play() 一个坏地址
+      startSource(S.songs[S.cur], 0)
       return
     }
     audio.paused ? audio.play().catch(function () {}) : audio.pause()
@@ -793,17 +884,7 @@ input { font: inherit; color: inherit; }
     ;['btnPlay', 'mbPlay', 'shPlay'].forEach(function (id) { $(id).setAttribute('aria-label', paused ? '播放' : '暂停') })
   }
 
-  audio.addEventListener('error', function () {
-    var sg = S.songs[S.cur]
-    if (!sg) return
-    if (audio.dataset.fallback !== '1' && sg.url) {
-      audio.dataset.fallback = '1'
-      audio.src = streamUrl(sg, audio.dataset.svc || S.svc)
-      audio.play().catch(function () {})
-      return
-    }
-    toast('该曲目播放失败，音源可能已失效', true)
-  })
+  audio.addEventListener('error', recover)
 
   /* ---------- 进度 / 音量 ---------- */
   function paintProgress() {
@@ -945,27 +1026,68 @@ input { font: inherit; color: inherit; }
   $('btnQueue').addEventListener('click', function () { setTab('queue') })
 
   /* ---------- 下载 ---------- */
-  function download(sg) {
+  // 不再用裸 <a download>：那样后端返回 502 / 错误页也会被浏览器存成 .mp3。
+  // 现在先校验状态码与 content-type，确认拿到真实音频后再落盘。
+  function saveBlob(blob, name) {
+    var url = URL.createObjectURL(blob)
     var a = document.createElement('a')
-    a.href = streamUrl(sg)
-    a.download = sg.file
+    a.href = url
+    a.download = name
     document.body.appendChild(a)
     a.click()
     a.remove()
-    toast('已开始下载 · ' + sg.file)
+    setTimeout(function () { URL.revokeObjectURL(url) }, 60000)
+  }
+
+  function download(sg, btn) {
+    if (!sg) return
+    if (btn && btn.classList.contains('busy')) return
+    var name = /\.(mp3|flac|m4a|aac|ogg|wav)$/i.test(sg.file) ? sg.file : sg.file + '.mp3'
+
+    if (btn) { btn.classList.add('busy'); btn.disabled = true }
+    toast('正在获取音频 · ' + name)
+
+    var ctrl = new AbortController()
+    // 内网几秒即可；给到 3 分钟，超时说明音源卡死
+    var timer = setTimeout(function () { ctrl.abort() }, 180000)
+
+    fetch(streamUrl(sg), { signal: ctrl.signal })
+      .then(function (res) {
+        if (!res.ok) throw new Error('服务端返回 HTTP ' + res.status)
+        var ct = (res.headers.get('content-type') || '').toLowerCase()
+        if (/^(application\/json|text\/)/.test(ct)) throw new Error('服务端返回的是错误信息，不是音频')
+        return res.blob()
+      })
+      .then(function (blob) {
+        if (!blob.size) throw new Error('音频内容为空')
+        saveBlob(blob, name)
+        toast('已保存 · ' + name)
+      })
+      .catch(function (e) {
+        if (e && e.name === 'AbortError') toast('下载超时，已取消', true)
+        else toast('下载失败：' + (e && e.message ? e.message : '未知错误'), true)
+      })
+      .finally(function () {
+        clearTimeout(timer)
+        if (btn) { btn.classList.remove('busy'); btn.disabled = false }
+      })
   }
 
   /* ---------- 事件绑定 ---------- */
   $('searchForm').addEventListener('submit', function (ev) { ev.preventDefault(); search(1) })
   $('chanList').addEventListener('click', function (ev) {
     var btn = ev.target.closest('.chan')
-    if (!btn) return
-    S.svc = btn.dataset.svc
+    if (btn) switchSvc(btn.dataset.svc)
+  })
+  function switchSvc(name) {
+    if (!SVC[name]) return
+    S.svc = name
     Array.prototype.forEach.call(document.querySelectorAll('.chan'), function (b) {
-      b.setAttribute('aria-current', String(b === btn))
+      b.setAttribute('aria-current', String(b.dataset.svc === name))
     })
     if (S.q) search(1)
-  })
+    else $('q').focus()
+  }
   $('btnPlay').addEventListener('click', toggle)
   $('mbPlay').addEventListener('click', toggle)
   $('shPlay').addEventListener('click', toggle)

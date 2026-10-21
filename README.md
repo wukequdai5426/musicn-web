@@ -11,6 +11,8 @@ ghcr.io/wukequdai5426/musicn-web:latest
 
 支持 `linux/amd64` 与 `linux/arm64`，由 GitHub Actions 自动构建（见 `.github/workflows/docker-publish.yml`）。
 
+> **2026-10-21 修复**：原版 `/download` 一被调用就会让 `msc` 进程崩溃（`got.stream().pipe(res)` 没有 error 监听），表现为「搜得到、下载和播放全废」。本镜像已改为自己拉取音频流（补浏览器 UA / Referer、跟随跳转、支持 Range、失败只返回 JSON），实测整首 5.1 MB 下载 1.2 秒完成、拖动进度返回 206。详见 [CHANGELOG.md](CHANGELOG.md) 第 0 节。
+
 ---
 
 ## 飞牛 fnOS 部署（三步）
@@ -151,8 +153,11 @@ MusicN Web 已启动，监听端口 7478
 | 日志报 entrypoint 找不到或无执行权限 | 脚本被转成 CRLF 了。仓库有 `.gitattributes` 强制 LF；手动拷贝过的执行 `sed -i 's/\r$//' docker-entrypoint.sh` 后重新 build |
 | 页面能开、搜索报"无法连接 musicn 服务" | 后端没起来或端口不符。确认 `MUSICN_INTERNAL_PORT` 与 `MUSICN_TARGET` 一致（默认 7479） |
 | 日志频繁出现"后端意外退出…自动重启" | 上游网络抖动触发 musicn 崩溃，镜像会自动恢复；若持续出现，给容器配稳定 DNS（`dns: [223.5.5.5]`） |
-| 咪咕源全部"暂无音源" | 上游行为：咪咕对多数曲目已不提供免费直链，换网易/酷狗源 |
-| 搜索转圈十几秒 | 咪咕源要为每首歌抓歌词，首次较慢属正常 |
+| 点了播放没反应 / 下载拿不到文件 | 旧镜像（2026-10-21 之前构建）的问题，`docker compose pull` 拉到新镜像即可；新镜像里失败会明确提示原因 |
+| 下载按钮一直转圈 | 音源 CDN 慢或链接过期。等 3 分钟会超时并提示；重新搜索拿新链接再试 |
+| 某些曲目显示"无音源"（灰掉） | 上游没给免费直链。网易云约 2/10 有直链，酷狗/酷我/咪咕多数没有；页面顶部会提示并可一键换源 |
+| 咪咕源几乎全是"无音源" | 上游行为：咪咕对多数曲目已不提供免费直链，换网易云源 |
+| 搜索转圈十几秒 | 该源要为每首歌抓歌词，首次较慢属正常 |
 | 7478 端口被占用 | 改 `PORT` 与端口映射；内部端口用 `MUSICN_INTERNAL_PORT` 调整 |
 | 拉取时报 `read: connection reset by peer` | 见下方「国内网络拉取失败」 |
 | 拉取 ghcr.io 很慢 | 用「自己构建」的方式，或改用下方镜像源 |
