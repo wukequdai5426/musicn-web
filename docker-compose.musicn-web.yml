@@ -3,10 +3,14 @@
 #
 # 启动：docker compose -f docker-compose.musicn-web.yml up -d
 # 说明：本文件可从原 musicn 的 compose 直接替换使用，注意不要保留旧的 entrypoint 行。
+#
+# 国内网络拉取失败（如 read: connection reset by peer）时，二选一：
+#   1. 在同目录 .env 里加一行：MUSICN_IMAGE=ghcr.nju.edu.cn/wukequdai5426/musicn-web:latest
+#   2. 直接改用 docker-compose.cn.yml
 
 services:
   musicn:
-    image: ghcr.io/wukequdai5426/musicn-web:latest
+    image: ${MUSICN_IMAGE:-ghcr.io/wukequdai5426/musicn-web:latest}
     # 本地构建时改为：build: .
     container_name: musicn
     restart: unless-stopped

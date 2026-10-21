@@ -154,7 +154,75 @@ MusicN Web 已启动，监听端口 7478
 | 咪咕源全部"暂无音源" | 上游行为：咪咕对多数曲目已不提供免费直链，换网易/酷狗源 |
 | 搜索转圈十几秒 | 咪咕源要为每首歌抓歌词，首次较慢属正常 |
 | 7478 端口被占用 | 改 `PORT` 与端口映射；内部端口用 `MUSICN_INTERNAL_PORT` 调整 |
-| 拉取 ghcr.io 很慢 | 用"自己构建"的方式，或在飞牛 Docker 里配镜像加速 |
+| 拉取时报 `read: connection reset by peer` | 见下方「国内网络拉取失败」 |
+| 拉取 ghcr.io 很慢 | 用「自己构建」的方式，或改用下方镜像源 |
+
+---
+
+## 国内网络拉取失败（connection reset by peer）
+
+典型报错：
+
+```
+43.98MB/43.98MB
+read tcp [240e:...]:46730->[2606:50c0:8000::154]:443: read: connection reset by peer
+```
+
+`2606:50c0:8000::/32` 是 GitHub CDN 的 IPv6 段。出现该错误说明**拉取走 IPv6 到了 GitHub 的 CDN，中途被中断**，与镜像本身无关。按下面顺序处理：
+
+### 方案 1：直接重试（最快，先试这个）
+
+镜像层是分层下载的，已完成的层不会重下：
+
+```bash
+docker compose pull
+# 失败就再来一次，通常第二次能续上剩余层
+```
+
+### 方案 2：换国内镜像源（推荐，已验证可用）
+
+仓库提供了现成文件 `docker-compose.cn.yml`，或只在 `.env` 里覆盖镜像地址：
+
+```bash
+# 方式 A：用现成 compose
+docker compose -f docker-compose.cn.yml up -d
+
+# 方式 B：在原 compose 同目录新建 .env，写入一行
+echo 'MUSICN_IMAGE=ghcr.nju.edu.cn/wukequdai5426/musicn-web:latest' > .env
+docker compose up -d
+```
+
+`ghcr.nju.edu.cn` 是南京大学提供的 GHCR 反向代理，实测拉取本镜像约 30 秒，镜像内容与官方地址完全一致。
+
+### 方案 3：让系统优先走 IPv4（一劳永逸，修复根因）
+
+飞牛为 Debian 系，编辑 `/etc/gai.conf` 让域名解析优先返回 IPv4，再重启 Docker：
+
+```bash
+# 取消默认文件里那行注释；若不存在则追加
+sudo sed -i 's/^#\?precedence ::ffff:0:0\/96.*/precedence ::ffff:0:0\/96  100/' /etc/gai.conf
+
+# 验证：输出的地址应 IPv4 在前
+getent ahosts ghcr.io | head -3
+
+sudo systemctl restart docker
+docker pull ghcr.io/wukequdai5426/musicn-web:latest
+```
+
+若不想动系统配置，也可以在飞牛「系统设置 → 网络」里临时关闭 IPv6，拉取完成后再打开。
+
+### 方案 4：完全不拉镜像（本地构建 / 离线导入）
+
+```bash
+# A. 在飞牛上构建（基础镜像已在本地时只需数秒，不产生大流量下载）
+cd /vol1/1000/docker/musicn-web
+docker build -t musicn-web:latest .
+# compose 里改为：build: .   并去掉 image 行
+
+# B. 在另一台能拉通的机器上导出，再拷到飞牛导入
+docker save ghcr.io/wukequdai5426/musicn-web:latest -o musicn-web.tar
+docker load -i musicn-web.tar
+```
 
 ## 说明
 

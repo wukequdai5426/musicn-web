@@ -1,0 +1,15 @@
+# 国内网络专用：通过南京大学 GHCR 镜像源拉取
+# 适用症状：docker pull 时报 read: connection reset by peer（IPv6 到 GitHub CDN 被中断）
+#
+# 启动：docker compose -f docker-compose.cn.yml up -d
+# 说明：镜像内容与 ghcr.io 完全一致（同一 digest 源），仅拉取入口不同。
+
+services:
+  musicn:
+    image: ghcr.nju.edu.cn/wukequdai5426/musicn-web:latest
+    container_name: musicn
+    restart: unless-stopped
+    ports:
+      - "7478:7478"
+    volumes:
+      - ./data:/data

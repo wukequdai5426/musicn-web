@@ -8,6 +8,8 @@ on:
       - "**.md"
       - ".gitignore"
       - "LICENSE"
+      - "**.yml"
+      - "**.yaml"
   workflow_dispatch:
 
 jobs:
