@@ -1,0 +1,9 @@
+.git
+.github
+*.md
+*.yml
+*.yaml
+.gitignore
+.gitattributes
+docker-compose*.yml
+push-to-github.sh

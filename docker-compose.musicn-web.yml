@@ -1,0 +1,19 @@
+# 方案一（推荐）：使用自建单容器镜像
+# 一个容器 = musicn 后端 + 新前端，对外仍只占 7478，访问地址和原来一样。
+#
+# 镜像构建方式二选一：
+#   A. 推到 GitHub，Actions 自动构建并推送到 ghcr.io/<用户名>/musicn-web:latest（见 README）
+#   B. 直接在飞牛 SSH 里构建：docker build -t musicn-web:latest .
+#
+# 启动：docker compose -f docker-compose.musicn-web.yml up -d
+
+services:
+  musicn:
+    image: ghcr.io/CHANGE_ME/musicn-web:latest   # 改成 ghcr.io/<你的GitHub用户名>/musicn-web:latest
+    # 本地构建时改成：build: .   并删掉上面 image 行
+    container_name: musicn
+    restart: unless-stopped
+    ports:
+      - "7478:7478"
+    volumes:
+      - ./data:/data
