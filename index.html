@@ -566,8 +566,8 @@ input { font: inherit; color: inherit; }
       lrc: s.lrc || ''
     }
   }
-  function streamUrl(sg) {
-    return '/api/download?service=' + S.svc +
+  function streamUrl(sg, svc) {
+    return '/api/download?service=' + (svc || S.svc) +
       '&url=' + encodeURIComponent(sg.url) +
       '&songName=' + encodeURIComponent(sg.file) +
       '&lyricUrl=' + encodeURIComponent(sg.lyricUrl)
@@ -598,8 +598,12 @@ input { font: inherit; color: inherit; }
     renderSkeleton()
     $('btnSearch').disabled = true
 
+    // 45 秒无响应则中止，避免界面一直停在骨架屏
+    var ctrl = new AbortController()
+    var timer = setTimeout(function () { ctrl.abort() }, 45000)
+
     fetch('/api/search?service=' + S.svc + '&text=' + encodeURIComponent(q) +
-      '&pageNum=' + S.page + '&pageSize=' + S.pageSize)
+      '&pageNum=' + S.page + '&pageSize=' + S.pageSize, { signal: ctrl.signal })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
       .then(function (data) {
         var list = (data && data.searchSongs) || []
@@ -615,11 +619,20 @@ input { font: inherit; color: inherit; }
       })
       .catch(function (e) {
         $('stage').innerHTML = ''
+        if (e && e.name === 'AbortError') {
+          renderNotice('搜索超时',
+            '45 秒内没有返回结果。音乐源响应偏慢时可重试，或换用其他音源。<br>' +
+            '<span style="color:var(--text-3);font-size:13px">查询词：' + esc(q) + '</span>', true)
+          return
+        }
         renderNotice('无法连接 musicn 服务',
           '确认容器运行中、端口已映射，且代理指向正确。<br><code>node server.js http://127.0.0.1:7478</code>' +
           '<br><span style="color:var(--text-3);font-size:13px">' + esc(e.message) + '</span>', true)
       })
-      .finally(function () { $('btnSearch').disabled = false })
+      .finally(function () {
+        clearTimeout(timer)
+        $('btnSearch').disabled = false
+      })
   }
 
   function renderSkeleton() {
@@ -717,7 +730,9 @@ input { font: inherit; color: inherit; }
     $('mobileBar').classList.add('up')
 
     audio.dataset.fallback = ''
-    audio.src = sg.url || streamUrl(sg)
+    // 记住本次播放所用的音源，切源后回退时仍走正确的源
+    audio.dataset.svc = S.svc
+    audio.src = sg.url || streamUrl(sg, S.svc)
     audio.play().catch(function () {})
   }
 
@@ -783,7 +798,7 @@ input { font: inherit; color: inherit; }
     if (!sg) return
     if (audio.dataset.fallback !== '1' && sg.url) {
       audio.dataset.fallback = '1'
-      audio.src = streamUrl(sg)
+      audio.src = streamUrl(sg, audio.dataset.svc || S.svc)
       audio.play().catch(function () {})
       return
     }
@@ -987,15 +1002,18 @@ input { font: inherit; color: inherit; }
 
   /* ---------- 键盘 ---------- */
   document.addEventListener('keydown', function (ev) {
-    var typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)
+    var tag = document.activeElement.tagName
+    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(tag)
+    // 按钮/链接自身的空格与方向键行为交给浏览器，避免与快捷键重复触发
+    var onControl = /^(BUTTON|A)$/.test(tag)
     if ((ev.key === 'k' || ev.key === 'K') && (ev.metaKey || ev.ctrlKey)) {
       ev.preventDefault(); $('q').focus(); $('q').select(); return
     }
-    if (ev.key === '/' && !typing) { ev.preventDefault(); $('q').focus(); return }
-    if (ev.key === ' ' && !typing) { ev.preventDefault(); toggle(); return }
+    if (ev.key === '/' && !typing && !onControl) { ev.preventDefault(); $('q').focus(); return }
+    if (ev.key === ' ' && !typing && !onControl) { ev.preventDefault(); toggle(); return }
     if (ev.key === 'Escape') { $('sheet').classList.remove('open'); return }
-    if (ev.key === 'ArrowRight' && (ev.metaKey || ev.ctrlKey)) { step(1); return }
-    if (ev.key === 'ArrowLeft' && (ev.metaKey || ev.ctrlKey)) { step(-1); return }
+    if (ev.key === 'ArrowRight' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); step(1); return }
+    if (ev.key === 'ArrowLeft' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); step(-1); return }
   })
 
   /* ---------- 初始化 ---------- */
